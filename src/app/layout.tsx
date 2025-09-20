@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Recipe AI Generator",
-  description: "Meet Your Personal Recipe AI",
+  description: "NetRealPulse",
 };
 
 export default function RootLayout({
