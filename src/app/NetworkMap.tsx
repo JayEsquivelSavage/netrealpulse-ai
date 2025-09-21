@@ -350,7 +350,7 @@ const NetworkMap = forwardRef<NetworkMapHandle, {}>(function NetworkMap(_, ref) 
     <div className="w-full h-[520px] rounded-xl overflow-hidden relative">
       {/* Legend (strict categories) */}
       <div className="absolute z-[500] bottom-3 left-3 bg-[#0f1418]/85 border border-[#2a3238] rounded-md px-3 py-2 text-xs text-gray-200">
-        <div className="font-semibold mb-1">Severity (Strict)</div>
+        <div className="font-semibold mb-1">Severity </div>
         <div className="flex items-center gap-3">
           <span className="inline-block w-3 h-3 rounded-sm" style={{ background: LEVEL_COLORS.Normal }} /> Normal
           <span className="inline-block w-3 h-3 rounded-sm" style={{ background: LEVEL_COLORS.High }} /> High

@@ -163,7 +163,7 @@ export default function Home() {
             <label className="text-sm text-gray-300/80 block">Location:</label>
             <input
               name="ingredients"
-              placeholder="e.g., 400 S Houston St, Dallas TX'\"
+              placeholder="e.g., 400 S Houston St, Dallas TX"
               className="w-full rounded-lg bg-[#0f1418] border border-[#2a3238] px-3 py-2 outline-none focus:ring-2 focus:ring-sky-500/40"
             />
             <button
