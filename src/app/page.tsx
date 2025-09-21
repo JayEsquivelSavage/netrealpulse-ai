@@ -1,16 +1,19 @@
 "use client";
 
-import React, { FormEvent, useState } from "react";
+import React, { FormEvent, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { Amplify } from "aws-amplify";
 import outputs from "../../amplify_outputs.json";
 import { FaCheckCircle, FaTruck } from "react-icons/fa";
 import { generateRecipe } from "./actions";
-import NetworkMap from "./NetworkMap"; // <- if you put it in src/components/, use: ../components/NetworkMap
+import type { NetworkMapHandle } from "./NetworkMap";
+
+// ✅ Import map client-side only to avoid `window is not defined`
+const NetworkMap = dynamic(() => import("./NetworkMap"), { ssr: false });
 
 // Configure Amplify once
 Amplify.configure(outputs, { ssr: true });
 
-/** Local Card (simple wrapper for consistent tiles) */
 const Card = ({
   title,
   className = "",
@@ -42,18 +45,53 @@ const StatusRow = ({ ok, label, suffix }: { ok: boolean; label: string; suffix?:
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
+  const mapRef = useRef<NetworkMapHandle>(null);
 
-  // Keep the same submit pipeline: FormData -> generateRecipe(formData)
+  async function geocode(q: string) {
+    if (!q.trim()) return null;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+      q
+    )}&limit=1&addressdetails=1`;
+    const res = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "UpliftDashboard/1.0",
+        Referer: typeof window !== "undefined" ? window.location.origin : "",
+      },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (Array.isArray(data) && data[0]) {
+      return {
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon),
+        displayName: data[0].display_name as string,
+      };
+    }
+    return null;
+  }
+
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
     try {
-      const formData = new FormData(event.currentTarget);
-      await generateRecipe(formData); // unchanged backend call
+      const form = event.currentTarget as HTMLFormElement;
+      const formData = new FormData(form);
+
+      // Use the “Location” field to geocode and fly the map + drop pin
+      const q = (formData.get("ingredients") || "").toString();
+      if (q) {
+        const loc = await geocode(q);
+        if (loc) {
+          mapRef.current?.flyTo(loc.lat, loc.lng, { zoom: 14, place: loc.displayName });
+        }
+      }
+
+      await generateRecipe(formData); // keep your server action
       alert("Uplift request submitted 👍");
-      (event.currentTarget as HTMLFormElement).reset();
-    } catch (e) {
-      alert(`An error occurred: ${e}`);
+      form.reset();
+    } catch (e: any) {
+      alert(`An error occurred: ${e?.message || e}`);
     } finally {
       setLoading(false);
     }
@@ -61,7 +99,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen text-white bg-[#0f1418]">
-      {/* Header */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-5">
         <div className="flex items-center justify-between">
           <h1 className="text-lg md:text-xl tracking-[0.2em] font-semibold text-gray-200/90">
@@ -73,18 +110,12 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Dashboard grid */}
-      <div
-        className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 pb-10
-                   grid grid-cols-1 lg:grid-cols-3 lg:auto-rows-[300px] gap-5"
-      >
-        {/* Interactive Map — spans 2 columns x 2 rows */}
-        <Card className="p-0 lg:col-span-2 lg:row-span-2 h-full">
-          <NetworkMap />
+      <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 pb-10 grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <Card className="p-0 lg:col-span-2">
+          <NetworkMap ref={mapRef} />
         </Card>
 
-        {/* NETWORK STATUS */}
-        <Card title="NETWORK STATUS" className="h-full">
+        <Card title="NETWORK STATUS">
           <div className="space-y-1.5">
             <StatusRow ok label="Cell Sites" />
             <StatusRow ok label="Backhaul" />
@@ -92,22 +123,29 @@ export default function Home() {
           </div>
         </Card>
 
-        {/* DEMAND METRICS */}
-        <Card title="DEMAND METRICS" className="h-full">
+        <Card title="DEMAND METRICS">
           <div className="space-y-2 text-gray-200/90">
-            <div className="flex justify-between"><span>Active Sessions</span><span className="font-semibold">2,500</span></div>
-            <div className="flex justify-between"><span>Data Throughput</span><span className="font-semibold">450 Mbps</span></div>
-            <div className="flex justify-between"><span>Voice Traffic</span><span className="font-semibold">120 calls</span></div>
+            <div className="flex justify-between">
+              <span>Active Sessions</span>
+              <span className="font-semibold">2,500</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Data Throughput</span>
+              <span className="font-semibold">450 Mbps</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Voice Traffic</span>
+              <span className="font-semibold">120 calls</span>
+            </div>
           </div>
         </Card>
 
-        {/* DEPLOYED ASSETS */}
-        <Card title="DEPLOYED ASSETS" className="h-full">
+        <Card title="DEPLOYABLES">
           <div className="divide-y divide-[#2a3238]/80">
             {[
-              { name: "SatCOLT", status: "Active" },
-              { name: "SatCOLT", status: "In Transit" },
-              { name: "SatCOLT", status: "30 min" },
+              { name: "COLT", status: "Active" },
+              { name: "COLT", status: "In Transit" },
+              { name: "COLT", status: "30 min" },
             ].map((d, i) => (
               <div key={i} className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3">
@@ -120,23 +158,12 @@ export default function Home() {
           </div>
         </Card>
 
-        {/* Inventory/Assets */}
-        <Card title="INVENTORY/ASSETS" className="h-full">
-          <div className="space-y-2">
-            <div className="flex justify-between"><span className="text-gray-200/90">COLT</span><span className="text-sm text-gray-300">Active</span></div>
-            <div className="flex justify-between"><span className="text-gray-200/90">In Transit</span><span className="text-sm text-gray-300">15 min</span></div>
-            <div className="flex justify-between"><span className="text-gray-200/90">Voice Traffic</span><span className="text-sm text-gray-300">120 calls</span></div>
-          </div>
-        </Card>
-
-        {/* UPLIFT REQUEST — still posts to generateRecipe(formData) */}
-        <Card title="UPLIFT REQUEST" className="h-full">
+        <Card title="UPLIFT REQUEST">
           <form onSubmit={onSubmit} className="space-y-3">
-            {/* Keep this field name so actions.ts doesn't change */}
             <label className="text-sm text-gray-300/80 block">Location:</label>
             <input
               name="ingredients"
-              placeholder="e.g., Austin, TX"
+              placeholder="e.g., 400 S Houston St, Dallas TX'\"
               className="w-full rounded-lg bg-[#0f1418] border border-[#2a3238] px-3 py-2 outline-none focus:ring-2 focus:ring-sky-500/40"
             />
             <button
